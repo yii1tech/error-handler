@@ -108,4 +108,124 @@ class ErrorHandler extends CErrorHandler
         $traceReflection->setAccessible(true);
         $traceReflection->setValue($exception, $trace);
     }
+
+    public function shouldRenderErrorAsJson(): bool
+    {
+        return !empty($_SERVER['HTTP_ACCEPT']) && strcasecmp($_SERVER['HTTP_ACCEPT'], 'application/json') === 0;
+    }
+
+    /**
+     * Renders current error information as JSON output.
+     * This method will display information from current {@see getError()} value.
+     *
+     * > Note: this method does NOT terminate the script.
+     */
+    public function renderErrorAsJson(): void
+    {
+        $error = $this->getError();
+        if (empty($error)) {
+            return;
+        }
+
+        unset($error['trace']);
+
+        $responseData = [
+            'error' => $this->getHttpHeader($error['code']),
+            'code' => $error['code'],
+        ];
+
+        $jsonFlags = 0;
+        if (YII_DEBUG) {
+            $jsonFlags = JSON_PRETTY_PRINT;
+
+            $error['traces'] = $this->filterErrorTrace($error['traces']);
+
+            $responseData = array_merge($responseData, $error);
+        }
+
+        header('Content-Type: application/json; charset=utf-8');
+
+        echo json_encode($responseData, $jsonFlags);
+    }
+
+    /**
+     * @param array $trace raw exception stack trace.
+     * @return array simplified stack trace.
+     */
+    private function filterErrorTrace(array $trace): array
+    {
+        /** @var ErrorTraceFilter $traceFilter */
+        $traceFilter = Yii::createComponent([
+            'class' => ErrorTraceFilter::class,
+        ]);
+
+        return $traceFilter->filter($trace);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    protected function renderException(): void
+    {
+        $exception = $this->getException();
+
+        if ($this->errorAction !== null) {
+            Yii::app()->runController($this->errorAction);
+
+            return;
+        }
+
+        if ($exception instanceof \CHttpException || !YII_DEBUG) {
+            $this->renderError();
+
+            return;
+        }
+
+        if ($this->shouldRenderErrorAsJson()) {
+            $this->renderErrorAsJson();
+
+            return;
+        }
+
+        if ($this->isAjaxRequest()) {
+            Yii::app()->displayException($exception);
+
+            return;
+        }
+
+        $this->render('exception', $this->getError());
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    protected function renderError(): void
+    {
+        if ($this->errorAction !== null) {
+            Yii::app()->runController($this->errorAction);
+
+            return;
+        }
+
+        if ($this->shouldRenderErrorAsJson()) {
+            $this->renderErrorAsJson();
+
+            return;
+        }
+
+        $data = $this->getError();
+        if ($this->isAjaxRequest()) {
+            Yii::app()->displayError($data['code'], $data['message'], $data['file'], $data['line']);
+
+            return;
+        }
+
+        if (YII_DEBUG) {
+            $this->render('exception', $data);
+
+            return;
+        }
+
+        $this->render('error',$data);
+    }
 }
