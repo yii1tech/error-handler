@@ -5,6 +5,10 @@ namespace yii1tech\error\handler;
 use CComponent;
 
 /**
+ * ErrorTraceFilter creates simplified representation of the stack trace.
+ *
+ * @see \yii1tech\error\handler\ErrorHandler::filterErrorTrace()
+ *
  * @author Paul Klimov <klimov.paul@gmail.com>
  * @since 1.0
  */
@@ -13,11 +17,17 @@ class ErrorTraceFilter extends CComponent
     /**
      * @var int maximum number of trace source code lines to be displayed. Defaults to 10.
      */
-    public $maxTraceSourceLines = 10;
+    public $maxTraceSize = 10;
 
+    /**
+     * Creates simplified representation of the given stack trace.
+     *
+     * @param array $trace raw trace.
+     * @return array simplified trace.
+     */
     public function filter(array $trace): array
     {
-        $trace = array_slice($trace, 0, $this->maxTraceSourceLines);
+        $trace = array_slice($trace, 0, $this->maxTraceSize);
 
         $result = [];
         foreach ($trace as $entry) {
@@ -81,9 +91,9 @@ class ErrorTraceFilter extends CComponent
         } elseif (is_string($value)) {
             if (strlen($value) > 64) {
                 return "'" . substr($value, 0, 64) . "...'";
-            } else {
-                return "'" . $value . "'";
             }
+
+            return "'" . $value . "'";
         } elseif (is_array($value)) {
             return '[' . $this->simplifyArguments($value) . ']';
         } elseif ($value === null) {

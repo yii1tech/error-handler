@@ -7,6 +7,13 @@ use ErrorException;
 use Yii;
 
 /**
+ * ErrorHandler is an enhanced version of standard Yii error handler.
+ *
+ * Its main feature is conversion of the PHP errors into exceptions, so they may be processed via `try..catch` blocks.
+ *
+ * > Note: in order for error to exception conversion to work, the error handler component should be added to the
+ *   application "preload" section.
+ *
  * Application configuration example:
  *
  * ```
@@ -25,6 +32,9 @@ use Yii;
  * ]
  * ```
  *
+ * In addition, this class provides support for error/exception rendering as JSON output, which is useful for modern
+ * XHR and API implementation.
+ *
  * @author Paul Klimov <klimov.paul@gmail.com>
  * @since 1.0
  */
@@ -32,9 +42,24 @@ class ErrorHandler extends CErrorHandler
 {
     /**
      * @var bool whether to convert PHP Errors into Exceptions.
+     *
      * @see \ErrorException
      */
     public $convertErrorToException = true;
+
+    /**
+     * @var callable|null a PHP callback, which result should determine whether the error/exception should be displayed as JSON.
+     * The callback signature:
+     *
+     * ```
+     * function(): bool
+     * ```
+     *
+     * If not set default condition of matching  'Accept' HTTP request header will be used.
+     *
+     * @see shouldRenderErrorAsJson()
+     */
+    public $shouldRenderErrorAsJsonCallback;
 
     /**
      * {@inheritDoc}
@@ -109,8 +134,21 @@ class ErrorHandler extends CErrorHandler
         $traceReflection->setValue($exception, $trace);
     }
 
+    /**
+     * Checks if error/exception should be rendered as JSON.
+     *
+     * @see $shouldRenderErrorAsJsonCallback
+     *
+     * > Tip: you can invoke this method inside your custom handler specified via {@see $errorAction}.
+     *
+     * @return bool whether the error/exception should be rendered as JSON.
+     */
     public function shouldRenderErrorAsJson(): bool
     {
+        if ($this->shouldRenderErrorAsJsonCallback !== null) {
+            return call_user_func($this->shouldRenderErrorAsJsonCallback);
+        }
+
         return !empty($_SERVER['HTTP_ACCEPT']) && strcasecmp($_SERVER['HTTP_ACCEPT'], 'application/json') === 0;
     }
 
@@ -119,6 +157,8 @@ class ErrorHandler extends CErrorHandler
      * This method will display information from current {@see getError()} value.
      *
      * > Note: this method does NOT terminate the script.
+     *
+     * > Tip: you can invoke this method inside your custom handler specified via {@see $errorAction}.
      */
     public function renderErrorAsJson(): void
     {
@@ -154,10 +194,8 @@ class ErrorHandler extends CErrorHandler
      */
     private function filterErrorTrace(array $trace): array
     {
-        /** @var ErrorTraceFilter $traceFilter */
-        $traceFilter = Yii::createComponent([
-            'class' => ErrorTraceFilter::class,
-        ]);
+        $traceFilter = new ErrorTraceFilter();
+        $traceFilter->maxTraceSize = $this->maxTraceSourceLines;
 
         return $traceFilter->filter($trace);
     }
@@ -168,12 +206,6 @@ class ErrorHandler extends CErrorHandler
     protected function renderException(): void
     {
         $exception = $this->getException();
-
-        if ($this->errorAction !== null) {
-            Yii::app()->runController($this->errorAction);
-
-            return;
-        }
 
         if ($exception instanceof \CHttpException || !YII_DEBUG) {
             $this->renderError();
