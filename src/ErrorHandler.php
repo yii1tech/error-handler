@@ -17,9 +17,9 @@ use Yii;
  * Application configuration example:
  *
  * ```
- * [
+ * return [
  *     'preload' => [
- *         'errorHandler', // override default error handler, allowing error to exception conversion
+ *         'errorHandler', // preload custom error handler, overriding the default one, allowing error to exception conversion
  *         // ...
  *     ],
  *     'components' => [
@@ -29,7 +29,7 @@ use Yii;
  *         // ...
  *     ],
  *     // ...
- * ]
+ * ];
  * ```
  *
  * In addition, this class provides support for error/exception rendering as JSON output, which is useful for modern
